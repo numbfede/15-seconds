@@ -29,6 +29,7 @@ Set `VITE_SERVER_URL` in `.env` (never hardcode only localhost in production).
 | `npm run typecheck` | Strict TypeScript across workspaces |
 | `npm run build` | Build shared → server → client |
 | `npm start` | Run production server (`server/dist/index.js`) |
+| `npm run smoke` | End-to-end check: join, rounds, echo replay (`SMOKE_URL` to target a remote server) |
 
 ## Gameplay
 
@@ -38,17 +39,23 @@ Set `VITE_SERVER_URL` in `.env` (never hardcode only localhost in production).
 - Mobile: virtual joystick + action button
 - Desktop: WASD / arrows + Space / E
 
+## Pointing the client at a server
+
+The client resolves the WebSocket URL in this order:
+
+1. `client/public/config.json` → `{ "serverUrl": "wss://…" }`, fetched at page load
+2. `VITE_SERVER_URL` baked in at build time
+3. same host as the page
+
+`config.json` is the one to change in production: edit it, push, and the deployed
+frontend points at the new server on the next load — no rebuild or env var change needed.
+
 ## Deploy
 
 ### Frontend (Vercel)
 
-`vercel.json` builds the client to `client/dist`.
-
-Set:
-
-```
-VITE_SERVER_URL=wss://YOUR_SERVER_HOST
-```
+`vercel.json` builds the client to `client/dist`. The Vercel project is linked to the
+GitHub repo, so pushing to `main` deploys automatically.
 
 ### Backend (Render free)
 
@@ -59,6 +66,14 @@ VITE_SERVER_URL=wss://YOUR_SERVER_HOST
 - health: `/health`
 - **Do not set `PORT`** — Render provides it
 - set `HOST=0.0.0.0`
+
+One-click blueprint deploy:
+<https://render.com/deploy?repo=https://github.com/numbfede/15-seconds>
+
+Then put the resulting `wss://<service>.onrender.com` into `client/public/config.json`.
+
+Free Render instances sleep after ~15 minutes idle and take roughly a minute to wake,
+so the first player to connect after a quiet period will wait.
 
 ### DNS / TLS
 

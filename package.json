@@ -19,7 +19,6 @@
     "smoke": "node scripts/smoke-test.mjs"
   },
   "devDependencies": {
-    "@railway/cli": "^5.45.2",
     "concurrently": "^9.1.2",
     "typescript": "^5.7.3"
   },
