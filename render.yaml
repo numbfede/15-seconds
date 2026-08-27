@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: 15-seconds-server
+    runtime: node
+    plan: free
+    region: frankfurt
+    buildCommand: npm install && npm run build -w shared && npm run build -w server
+    startCommand: node server/dist/index.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: ALLOW_BOTS
+        value: "false"
+      - key: DEBUG
+        value: "false"
+      - key: MIN_PLAYERS
+        value: "1"
+      - key: TOTAL_ROUNDS
+        value: "7"
+      - key: ROUND_DURATION
+        value: "15"
+      - key: MAX_PLAYERS
+        value: "15"
+      - key: MAX_ACTIVE_ECHOS
+        value: "60"
