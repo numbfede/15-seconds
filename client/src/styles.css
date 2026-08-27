@@ -407,6 +407,7 @@ button:active {
   width: 140px;
   height: 140px;
   touch-action: none;
+  display: none;
 }
 
 #action-btn {
@@ -450,9 +451,10 @@ button:active {
   transform: translate(-50%, -50%);
 }
 
+/* Sits below the top HUD row so it never covers the score pill. */
 .fullscreen-btn {
   position: absolute;
-  top: calc(10px + env(safe-area-inset-top));
+  top: calc(58px + env(safe-area-inset-top));
   right: 12px;
   pointer-events: auto;
   z-index: 5;
