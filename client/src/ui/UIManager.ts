@@ -8,7 +8,7 @@ import { GAME_CONFIG } from '@15-seconds/shared';
 
 export type MenuScreen = 'main' | 'create' | 'join' | 'lobby' | 'howto' | 'results' | 'hidden';
 
-export type ConnectionStatus = 'idle' | 'connecting' | 'online' | 'offline';
+export type ConnectionStatus = 'idle' | 'connecting' | 'waking' | 'online' | 'offline';
 
 export interface UICallbacks {
   onCreate: (name: string) => void;
@@ -85,6 +85,8 @@ export class UIManager {
         return 'SERVER ONLINE';
       case 'connecting':
         return 'CONNECTING…';
+      case 'waking':
+        return 'WAKING SERVER…';
       case 'offline':
         return 'SERVER OFFLINE';
       default:
@@ -93,6 +95,9 @@ export class UIManager {
   }
 
   private gateText(): string {
+    if (this.connection === 'waking') {
+      return 'The free server was asleep. This can take up to a minute — hang on.';
+    }
     if (this.connection !== 'offline') return '';
     return this.serverLabel
       ? `Cannot reach ${this.serverLabel} — retrying automatically.`

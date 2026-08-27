@@ -208,7 +208,8 @@ button:active {
   box-shadow: 0 0 14px rgba(78, 240, 168, 0.28);
 }
 
-.conn-connecting {
+.conn-connecting,
+.conn-waking {
   color: #ffd166;
   animation: conn-pulse 1.1s ease-in-out infinite;
 }

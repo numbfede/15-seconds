@@ -51,12 +51,20 @@ export function resolveServerUrl(): string {
 
 type MessageHandler = (msg: ServerMessage) => void;
 
-export type ConnectionStatus = 'idle' | 'connecting' | 'online' | 'offline';
+export type ConnectionStatus = 'idle' | 'connecting' | 'waking' | 'online' | 'offline';
 
 type StatusHandler = (status: ConnectionStatus) => void;
 
-const CONNECT_TIMEOUT_MS = 8000;
+/** A responsive server answers well within this; anything slower is a cold start. */
+const CONNECT_TIMEOUT_MS = 6000;
+/** Free hosting tiers sleep when idle and can take about a minute to boot. */
+const WAKE_TIMEOUT_MS = 75000;
 const MAX_QUEUE = 32;
+
+function healthUrl(wsUrl: string): string {
+  const httpUrl = wsUrl.replace(/^ws:/, 'http:').replace(/^wss:/, 'https:');
+  return `${httpUrl}/health`;
+}
 
 export class NetworkClient {
   private ws: WebSocket | null = null;
@@ -111,12 +119,18 @@ export class NetworkClient {
     }
     this.ws = ws;
 
-    // A socket stuck in CONNECTING never fires onclose on some browsers.
+    // A socket stuck in CONNECTING never fires onclose on some browsers, and a
+    // sleeping free-tier server stays stuck there for the whole cold start.
     this.connectTimeout = setTimeout(() => {
-      if (ws.readyState === WebSocket.CONNECTING) {
-        this.setStatus('offline');
-        ws.close();
-      }
+      if (ws.readyState !== WebSocket.CONNECTING) return;
+      this.setStatus('waking');
+      this.wakeServer();
+      this.connectTimeout = setTimeout(() => {
+        if (ws.readyState === WebSocket.CONNECTING) {
+          this.setStatus('offline');
+          ws.close();
+        }
+      }, WAKE_TIMEOUT_MS);
     }, CONNECT_TIMEOUT_MS);
 
     ws.onopen = () => {
@@ -152,6 +166,13 @@ export class NetworkClient {
     ws.onerror = () => {
       // onclose handles reconnection
     };
+  }
+
+  /** An ordinary HTTP hit is what boots a sleeping instance; the socket then succeeds. */
+  private wakeServer(): void {
+    void fetch(healthUrl(this.url), { mode: 'no-cors', cache: 'no-store' }).catch(() => {
+      // best effort
+    });
   }
 
   private scheduleReconnect(): void {
