@@ -1,10 +1,41 @@
 import type { ClientMessage, ServerMessage } from '@15-seconds/shared';
 import { parseServerMessage } from '@15-seconds/shared';
 
+function normalizeWsUrl(raw: string): string {
+  const trimmed = raw.trim().replace(/\/$/, '');
+  if (trimmed.startsWith('https://')) return `wss://${trimmed.slice('https://'.length)}`;
+  if (trimmed.startsWith('http://')) return `ws://${trimmed.slice('http://'.length)}`;
+  return trimmed;
+}
+
+let runtimeServerUrl: string | null = null;
+
+/**
+ * Lets the deployed frontend point at a new game server without a rebuild.
+ * Order: runtime config.json, then build-time env, then same-host guess.
+ */
+export async function loadRuntimeConfig(): Promise<void> {
+  try {
+    const res = await fetch(`/config.json?t=${Date.now()}`, { cache: 'no-store' });
+    if (!res.ok) return;
+    const data: unknown = await res.json();
+    if (data && typeof data === 'object' && 'serverUrl' in data) {
+      const value = (data as { serverUrl?: unknown }).serverUrl;
+      if (typeof value === 'string' && value.trim().length > 0) {
+        runtimeServerUrl = normalizeWsUrl(value);
+      }
+    }
+  } catch {
+    // config.json is optional
+  }
+}
+
 export function resolveServerUrl(): string {
+  if (runtimeServerUrl) return runtimeServerUrl;
+
   const fromEnv = import.meta.env.VITE_SERVER_URL as string | undefined;
   if (fromEnv && fromEnv.trim().length > 0) {
-    return fromEnv.trim().replace(/\/$/, '');
+    return normalizeWsUrl(fromEnv);
   }
 
   const { protocol, hostname } = window.location;

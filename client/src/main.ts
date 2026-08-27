@@ -1,6 +1,6 @@
 import type { GameSnapshot, ServerMessage } from '@15-seconds/shared';
 import { GAME_CONFIG } from '@15-seconds/shared';
-import { NetworkClient } from './networking/NetworkClient.js';
+import { NetworkClient, loadRuntimeConfig } from './networking/NetworkClient.js';
 import { UIManager } from './ui/UIManager.js';
 import { KeyboardInput } from './input/Keyboard.js';
 import { VirtualJoystick } from './input/VirtualJoystick.js';
@@ -147,8 +147,11 @@ function handleServerMessage(msg: ServerMessage): void {
 
 net.onMessage(handleServerMessage);
 net.onStatus((status) => ui.setConnection(status));
-ui.setServerLabel(net.url);
-net.connect();
+
+void loadRuntimeConfig().then(() => {
+  ui.setServerLabel(net.url);
+  net.connect();
+});
 
 function onStateFx(s: GameSnapshot): void {
   if (s.phase === 'COUNTDOWN' && prevPhase !== 'COUNTDOWN') {
