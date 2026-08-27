@@ -4,7 +4,9 @@ services:
     runtime: node
     plan: free
     region: frankfurt
-    buildCommand: npm install && npm run build -w shared && npm run build -w server
+    # NODE_ENV=production makes npm skip devDependencies, which drops TypeScript
+    # and breaks the build, so dev deps are requested explicitly.
+    buildCommand: npm ci --include=dev && npm run build -w shared && npm run build -w server
     startCommand: node server/dist/index.js
     healthCheckPath: /health
     envVars:

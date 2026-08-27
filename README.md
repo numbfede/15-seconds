@@ -61,11 +61,14 @@ GitHub repo, so pushing to `main` deploys automatically.
 
 `render.yaml` defines a free Frankfurt web service:
 
-- build: `npm install && npm run build -w shared && npm run build -w server`
+- build: `npm ci --include=dev && npm run build -w shared && npm run build -w server`
 - start: `node server/dist/index.js`
 - health: `/health`
 - **Do not set `PORT`** — Render provides it
 - set `HOST=0.0.0.0`
+
+`--include=dev` is required: Render sets `NODE_ENV=production`, which makes npm skip
+devDependencies, and the build needs TypeScript from there.
 
 One-click blueprint deploy:
 <https://render.com/deploy?repo=https://github.com/numbfede/15-seconds>
