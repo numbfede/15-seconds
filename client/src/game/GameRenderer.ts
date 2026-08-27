@@ -2,6 +2,13 @@ import type { GameSnapshot, PlayerPublic } from '@15-seconds/shared';
 import { GAME_CONFIG } from '@15-seconds/shared';
 import { ParticleSystem } from '../systems/ParticleSystem.js';
 
+/** Smallest zoom that still keeps a player circle comfortably tappable/visible. */
+const MIN_SCALE = 0.85;
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
 export class GameRenderer {
   readonly canvas: HTMLCanvasElement;
   readonly ctx: CanvasRenderingContext2D;
@@ -9,6 +16,7 @@ export class GameRenderer {
   private readonly particles = new ParticleSystem();
   private cameraX = 0;
   private cameraY = 0;
+  private cameraReady = false;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -22,6 +30,11 @@ export class GameRenderer {
     this.canvas.width = Math.floor(window.innerWidth * dpr);
     this.canvas.height = Math.floor(window.innerHeight * dpr);
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  /** Snaps the camera to the player on the next frame instead of sliding in from a stale spot. */
+  resetCamera(): void {
+    this.cameraReady = false;
   }
 
   addShake(amount = 6): void {
@@ -43,18 +56,39 @@ export class GameRenderer {
     const viewH = window.innerHeight;
 
     const pad = 16;
-    const scale = Math.min(
+    const fitScale = Math.min(
       (viewW - pad * 2) / state.mapWidth,
       (viewH - pad * 2) / state.mapHeight,
     );
+    // Fitting the whole arena on a phone would shrink players to a few pixels,
+    // so never zoom out past a readable size and pan instead.
+    const scale = Math.max(fitScale, MIN_SCALE);
 
     const local = state.players.find((p) => p.id === localId) ?? state.players[0];
     const targetX = local ? local.x : state.mapWidth / 2;
     const targetY = local ? local.y : state.mapHeight / 2;
 
-    // soft follow
-    this.cameraX += (targetX - this.cameraX) * 0.12;
-    this.cameraY += (targetY - this.cameraY) * 0.12;
+    if (!this.cameraReady) {
+      this.cameraReady = true;
+      this.cameraX = targetX;
+      this.cameraY = targetY;
+    } else {
+      // soft follow
+      this.cameraX += (targetX - this.cameraX) * 0.12;
+      this.cameraY += (targetY - this.cameraY) * 0.12;
+    }
+
+    // Keep the viewport inside the arena so players never stare into the void.
+    const halfViewW = viewW / 2 / scale;
+    const halfViewH = viewH / 2 / scale;
+    const camX =
+      halfViewW * 2 >= state.mapWidth
+        ? state.mapWidth / 2
+        : clamp(this.cameraX, halfViewW, state.mapWidth - halfViewW);
+    const camY =
+      halfViewH * 2 >= state.mapHeight
+        ? state.mapHeight / 2
+        : clamp(this.cameraY, halfViewH, state.mapHeight - halfViewH);
 
     const shakeX = this.shake ? (Math.random() - 0.5) * this.shake : 0;
     const shakeY = this.shake ? (Math.random() - 0.5) * this.shake : 0;
@@ -78,7 +112,7 @@ export class GameRenderer {
     ctx.save();
     ctx.translate(viewW / 2 + shakeX, viewH / 2 + shakeY);
     ctx.scale(scale, scale);
-    ctx.translate(-this.cameraX, -this.cameraY);
+    ctx.translate(-camX, -camY);
 
     this.drawGrid(ctx, state.mapWidth, state.mapHeight);
     this.drawWalls(ctx, state);

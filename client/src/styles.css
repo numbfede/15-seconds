@@ -451,11 +451,11 @@ button:active {
   transform: translate(-50%, -50%);
 }
 
-/* Sits below the top HUD row so it never covers the score pill. */
+/* Bottom-right, clear of the top HUD row and just above the action button. */
 .fullscreen-btn {
   position: absolute;
-  top: calc(58px + env(safe-area-inset-top));
-  right: 12px;
+  bottom: calc(124px + env(safe-area-inset-bottom));
+  right: 16px;
   pointer-events: auto;
   z-index: 5;
   padding: 8px 10px;

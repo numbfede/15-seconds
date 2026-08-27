@@ -78,6 +78,7 @@ const ui = new UIManager(menuRoot, hudRoot, toastRoot, {
 
 function enterGameView(): void {
   inGame = true;
+  renderer.resetCamera();
   ui.hideMenus();
   canvas.style.display = 'block';
   const touch = isTouchDevice();
