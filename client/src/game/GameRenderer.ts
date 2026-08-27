@@ -118,7 +118,7 @@ export class GameRenderer {
     this.drawWalls(ctx, state);
     this.drawObjective(ctx, state);
     this.drawEchoes(ctx, state);
-    this.drawPlayers(ctx, state, localId);
+    this.drawPlayers(ctx, state, localId, scale);
     this.particles.draw(ctx);
 
     ctx.restore();
@@ -234,13 +234,19 @@ export class GameRenderer {
     ctx: CanvasRenderingContext2D,
     state: GameSnapshot,
     localId: string | null,
+    scale: number,
   ): void {
     for (const player of state.players) {
-      this.drawPlayer(ctx, player, player.id === localId);
+      this.drawPlayer(ctx, player, player.id === localId, scale);
     }
   }
 
-  private drawPlayer(ctx: CanvasRenderingContext2D, player: PlayerPublic, isLocal: boolean): void {
+  private drawPlayer(
+    ctx: CanvasRenderingContext2D,
+    player: PlayerPublic,
+    isLocal: boolean,
+    scale: number,
+  ): void {
     ctx.save();
     ctx.beginPath();
     ctx.arc(player.x, player.y, GAME_CONFIG.PLAYER_RADIUS, 0, Math.PI * 2);
@@ -260,14 +266,20 @@ export class GameRenderer {
       ctx.fill();
     }
 
+    // Counter the world scale so names stay legible when zoomed out on phones.
+    const nameSize = 11 / scale;
+    const label = player.name.slice(0, 12);
     ctx.shadowBlur = 0;
-    ctx.fillStyle = 'rgba(0,0,0,0.55)';
-    ctx.fillRect(player.x - 28, player.y - 30, 56, 14);
-    ctx.fillStyle = '#e8f1ff';
-    ctx.font = '10px Space Grotesk, sans-serif';
+    ctx.font = `${nameSize}px Space Grotesk, sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(player.name.slice(0, 12), player.x, player.y - 23);
+    const boxW = ctx.measureText(label).width + nameSize;
+    const boxH = nameSize * 1.5;
+    const boxY = player.y - GAME_CONFIG.PLAYER_RADIUS - 4 - boxH;
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(player.x - boxW / 2, boxY, boxW, boxH);
+    ctx.fillStyle = '#e8f1ff';
+    ctx.fillText(label, player.x, boxY + boxH / 2);
     ctx.restore();
   }
 }
