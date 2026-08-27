@@ -20,32 +20,80 @@ export function resolveServerUrl(): string {
 
 type MessageHandler = (msg: ServerMessage) => void;
 
+export type ConnectionStatus = 'idle' | 'connecting' | 'online' | 'offline';
+
+type StatusHandler = (status: ConnectionStatus) => void;
+
+const CONNECT_TIMEOUT_MS = 8000;
+const MAX_QUEUE = 32;
+
 export class NetworkClient {
   private ws: WebSocket | null = null;
   private readonly queue: ServerMessage[] = [];
+  private readonly outbox: ClientMessage[] = [];
   private handlers = new Set<MessageHandler>();
+  private statusHandlers = new Set<StatusHandler>();
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private connectTimeout: ReturnType<typeof setTimeout> | null = null;
   private intentionallyClosed = false;
+  private attempts = 0;
   playerId: string | null = null;
   connected = false;
   lastPingMs = 0;
+  status: ConnectionStatus = 'idle';
   private pingTimer: ReturnType<typeof setInterval> | null = null;
 
   get url(): string {
     return resolveServerUrl();
   }
 
+  onStatus(handler: StatusHandler): () => void {
+    this.statusHandlers.add(handler);
+    handler(this.status);
+    return () => this.statusHandlers.delete(handler);
+  }
+
+  private setStatus(status: ConnectionStatus): void {
+    if (this.status === status) return;
+    this.status = status;
+    for (const handler of this.statusHandlers) handler(status);
+  }
+
   connect(): void {
     this.intentionallyClosed = false;
-    if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
+    if (
+      this.ws &&
+      (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)
+    ) {
       return;
     }
 
-    const ws = new WebSocket(this.url);
+    this.setStatus('connecting');
+
+    let ws: WebSocket;
+    try {
+      ws = new WebSocket(this.url);
+    } catch {
+      this.setStatus('offline');
+      this.scheduleReconnect();
+      return;
+    }
     this.ws = ws;
 
+    // A socket stuck in CONNECTING never fires onclose on some browsers.
+    this.connectTimeout = setTimeout(() => {
+      if (ws.readyState === WebSocket.CONNECTING) {
+        this.setStatus('offline');
+        ws.close();
+      }
+    }, CONNECT_TIMEOUT_MS);
+
     ws.onopen = () => {
+      this.clearConnectTimeout();
+      this.attempts = 0;
       this.connected = true;
+      this.setStatus('online');
+      this.flushOutbox();
       this.startPing();
     };
 
@@ -59,30 +107,73 @@ export class NetworkClient {
     };
 
     ws.onclose = () => {
+      this.clearConnectTimeout();
       this.connected = false;
       this.stopPing();
       if (!this.intentionallyClosed) {
-        this.reconnectTimer = setTimeout(() => this.connect(), 1200);
+        this.setStatus('offline');
+        this.scheduleReconnect();
+      } else {
+        this.setStatus('idle');
       }
     };
 
     ws.onerror = () => {
-      // onclose will handle reconnect
+      // onclose handles reconnection
     };
+  }
+
+  private scheduleReconnect(): void {
+    if (this.reconnectTimer) return;
+    this.attempts += 1;
+    const delay = Math.min(10000, 1000 * 2 ** Math.min(4, this.attempts - 1));
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      this.connect();
+    }, delay);
+  }
+
+  private clearConnectTimeout(): void {
+    if (this.connectTimeout) {
+      clearTimeout(this.connectTimeout);
+      this.connectTimeout = null;
+    }
   }
 
   disconnect(): void {
     this.intentionallyClosed = true;
     this.stopPing();
-    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    this.clearConnectTimeout();
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    this.outbox.length = 0;
     this.ws?.close();
     this.ws = null;
     this.connected = false;
+    this.setStatus('idle');
   }
 
+  /** Sends now when open, otherwise buffers until the socket opens. */
   send(msg: ClientMessage): void {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
-    this.ws.send(JSON.stringify(msg));
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify(msg));
+      return;
+    }
+
+    // Realtime input is worthless once stale, so never buffer it.
+    if (msg.type !== 'INPUT' && msg.type !== 'PING' && this.outbox.length < MAX_QUEUE) {
+      this.outbox.push(msg);
+    }
+    this.connect();
+  }
+
+  private flushOutbox(): void {
+    const pending = this.outbox.splice(0, this.outbox.length);
+    for (const msg of pending) {
+      this.ws?.send(JSON.stringify(msg));
+    }
   }
 
   onMessage(handler: MessageHandler): () => void {

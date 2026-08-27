@@ -8,6 +8,8 @@ import { GAME_CONFIG } from '@15-seconds/shared';
 
 export type MenuScreen = 'main' | 'create' | 'join' | 'lobby' | 'howto' | 'results' | 'hidden';
 
+export type ConnectionStatus = 'idle' | 'connecting' | 'online' | 'offline';
+
 export interface UICallbacks {
   onCreate: (name: string) => void;
   onJoin: (name: string, code: string) => void;
@@ -36,6 +38,8 @@ export class UIManager {
   private localId: string | null = null;
   private lastCountdownSec = -1;
   private scorePops: { text: string; born: number }[] = [];
+  private connection: ConnectionStatus = 'idle';
+  private serverLabel = '';
 
   constructor(
     menuRoot: HTMLElement,
@@ -54,12 +58,61 @@ export class UIManager {
     this.localId = id;
   }
 
+  setServerLabel(url: string): void {
+    this.serverLabel = url;
+  }
+
+  setConnection(status: ConnectionStatus): void {
+    if (this.connection === status) return;
+    this.connection = status;
+    this.paintConnection();
+  }
+
+  /** Updates the badge in place so menu inputs keep focus and typed text. */
+  private paintConnection(): void {
+    const badge = this.menuRoot.querySelector('#conn-badge') as HTMLElement | null;
+    if (badge) {
+      badge.className = `conn-badge conn-${this.connection}`;
+      badge.textContent = this.connectionText();
+    }
+    const gate = this.menuRoot.querySelector('#conn-gate') as HTMLElement | null;
+    if (gate) gate.textContent = this.gateText();
+  }
+
+  private connectionText(): string {
+    switch (this.connection) {
+      case 'online':
+        return 'SERVER ONLINE';
+      case 'connecting':
+        return 'CONNECTING…';
+      case 'offline':
+        return 'SERVER OFFLINE';
+      default:
+        return 'SERVER IDLE';
+    }
+  }
+
+  private gateText(): string {
+    if (this.connection !== 'offline') return '';
+    return this.serverLabel
+      ? `Cannot reach ${this.serverLabel} — retrying automatically.`
+      : 'Cannot reach the game server — retrying automatically.';
+  }
+
+  private connectionMarkup(): string {
+    return `
+      <div class="conn-badge conn-${this.connection}" id="conn-badge">${this.connectionText()}</div>
+      <div class="conn-gate" id="conn-gate">${escapeHtml(this.gateText())}</div>
+    `;
+  }
+
   showMain(): void {
     this.screen = 'main';
     this.menuRoot.innerHTML = `
       <div class="screen">
         <div class="brand">15 SECONDS</div>
         <div class="subtitle">Your past is still playing.</div>
+        ${this.connectionMarkup()}
         <div class="panel">
           <label for="nick">Nickname</label>
           <input id="nick" maxlength="16" placeholder="2–16 characters" value="${escapeHtml(loadNickname())}" />
@@ -82,6 +135,7 @@ export class UIManager {
         return;
       }
       saveNickname(name);
+      err.textContent = this.connection === 'online' ? '' : 'Connecting to server…';
       this.callbacks.onCreate(name);
     });
     this.menuRoot.querySelector('#btn-join')?.addEventListener('click', () => {
@@ -101,6 +155,7 @@ export class UIManager {
     this.menuRoot.innerHTML = `
       <div class="screen">
         <div class="brand">JOIN</div>
+        ${this.connectionMarkup()}
         <div class="panel">
           <label for="code">Room code</label>
           <input id="code" maxlength="4" placeholder="X7KF" style="text-transform:uppercase;letter-spacing:0.2em;text-align:center;font-family:Orbitron,sans-serif;" />
@@ -120,6 +175,7 @@ export class UIManager {
         err.textContent = 'Enter a room code';
         return;
       }
+      err.textContent = this.connection === 'online' ? '' : 'Connecting to server…';
       this.callbacks.onJoin(name, c);
     });
     this.menuRoot.querySelector('#btn-back')?.addEventListener('click', () => this.showMain());

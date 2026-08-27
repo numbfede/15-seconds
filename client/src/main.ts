@@ -59,32 +59,11 @@ document.getElementById('btn-fs')?.addEventListener('click', async () => {
 const ui = new UIManager(menuRoot, hudRoot, toastRoot, {
   onCreate: (name) => {
     audio.unlock();
-    net.connect();
-    const sendCreate = (): void => net.send({ type: 'CREATE_ROOM', name });
-    if (net.connected) sendCreate();
-    else {
-      const unsub = net.onMessage((msg) => {
-        if (msg.type === 'WELCOME') {
-          sendCreate();
-          unsub();
-        }
-      });
-    }
+    net.send({ type: 'CREATE_ROOM', name });
   },
   onJoin: (name, code) => {
     audio.unlock();
-    net.connect();
-    const sendJoin = (): void =>
-      net.send({ type: 'JOIN_ROOM', name, roomCode: code.toUpperCase() });
-    if (net.connected) sendJoin();
-    else {
-      const unsub = net.onMessage((msg) => {
-        if (msg.type === 'WELCOME') {
-          sendJoin();
-          unsub();
-        }
-      });
-    }
+    net.send({ type: 'JOIN_ROOM', name, roomCode: code.toUpperCase() });
   },
   onStart: () => net.send({ type: 'START_GAME' }),
   onLeave: () => {
@@ -167,6 +146,9 @@ function handleServerMessage(msg: ServerMessage): void {
 }
 
 net.onMessage(handleServerMessage);
+net.onStatus((status) => ui.setConnection(status));
+ui.setServerLabel(net.url);
+net.connect();
 
 function onStateFx(s: GameSnapshot): void {
   if (s.phase === 'COUNTDOWN' && prevPhase !== 'COUNTDOWN') {

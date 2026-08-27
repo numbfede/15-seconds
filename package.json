@@ -15,9 +15,11 @@
     "start": "npm run start -w server",
     "build:shared": "npm run build -w shared",
     "build:server": "npm run build -w shared && npm run build -w server",
-    "build:client": "npm run build -w shared && npm run build -w client"
+    "build:client": "npm run build -w shared && npm run build -w client",
+    "smoke": "node scripts/smoke-test.mjs"
   },
   "devDependencies": {
+    "@railway/cli": "^5.45.2",
     "concurrently": "^9.1.2",
     "typescript": "^5.7.3"
   },
